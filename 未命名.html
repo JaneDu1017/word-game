@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>单词配对游戏</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --left-color: #FFB6C1;
+            --right-color: #87CEFA;
+        }
+
+        body {
+            margin: 0;
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            touch-action: manipulation;
+        }
+
+        #header {
+            text-align: center;
+            position: relative;
+            margin-bottom: 15px;
+        }
+
+        #timer {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: #98FB98;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            position: fixed;
+            top: 10px;
+            right: 10px;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .column {
+            width: 100%;
+            min-height: 45vh;
+            background: #F5F5F5;
+            border-radius: 10px;
+            padding: 10px;
+            display: grid;
+            grid-template-rows: repeat(5, 1fr);
+            grid-gap: 8px;
+        }
+
+        .word-btn {
+            border: 2px solid #FFF;
+            border-radius: 8px;
+            font-size: clamp(16px, 4vw, 18px);
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            -webkit-tap-highlight-color: transparent;
+            padding: 8px;
+            min-height: 48px;
+        }
+
+        #controls {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            padding: 0 10px;
+            position: fixed;
+            bottom: 10px;
+            width: calc(100% - 20px);
+        }
+
+        #controls button {
+            padding: 12px;
+            font-size: 14px;
+            border-radius: 8px;
+            background: #E0E0E0;
+            border: none;
+        }
+
+        #hint {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #87CEFA;
+            position: fixed;
+            bottom: 80px;
+            right: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+        }
+
+        #hint-box {
+            display: none;
+            position: fixed;
+            bottom: 130px;
+            right: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            max-width: 300px;
+            font-size: 14px;
+        }
+
+        @media (orientation: landscape) {
+            .container {
+                flex-direction: row;
+                min-height: 60vh;
+            }
+            .column {
+                min-height: 60vh;
+            }
+        }
+
+        .red-flash {
+            animation: redFlash 0.5s;
+        }
+
+        @keyframes redFlash {
+            50% { background: #FF0000; }
+        }
+
+        #progress {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: #98FB98;
+            padding: 5px 15px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1 style="font-size: 1.5em">单词配对</h1>
+        <div id="progress">剩余：0</div>
+        <div id="timer">3:00</div>
+    </div>
+
+    <div class="container">
+        <div class="column" id="left-column"></div>
+        <div class="column" id="right-column"></div>
+    </div>
+
+    <div id="controls">
+        <button id="pause">暂停</button>
+        <button onclick="restartGame()">重玩</button>
+    </div>
+
+    <div id="hint">?</div>
+    <div id="hint-box"></div>
+
+    <script>
+        // 固定的单词对（已将您提供的内容整理为英文和中文对应关系）
+        const words = [
+            ["essential", "极其重要的;必不可少的"],
+            ["trace", "追溯;仔细寻找"],
+            ["dynasty", "朝代;王朝"],
+            ["specialty", "特色食品;专业"],
+            ["symbolize", "象征;代表"],
+            ["fortune", "运气;财富"],
+            ["wrap", "包裹;包"],
+            ["skip", "跳过;不做"],
+            ["filling", "填充物;馅"],
+            ["ground", "磨碎的;磨细的"],
+            ["ginger", "生姜"],
+            ["stir", "搅拌;打动"],
+            ["messy", "脏的;凌乱的"],
+            ["process", "过程;进程"],
+            ["pinch", "捏;夹"],
+            ["edge", "边缘"],
+            ["seal", "封口;密封"],
+            ["craft", "工艺;手艺"],
+            ["neat", "整齐的;整洁的"],
+            ["pleat", "褶;褶边"],
+            ["irregular", "不规则的;不整齐的"],
+            ["boil", "煮沸;煮"],
+            ["associate", "联想;联系"],
+            ["refrigerator", "冰箱"],
+            ["recall", "回忆;回想"],
+            ["package", "包装;包裹"],
+            ["frozen", "冷冻的;极冷的"],
+            ["chain", "连锁店;链条"],
+            ["expand", "扩展;扩大"],
+            ["attract", "吸引"],
+            ["standardize", "使标准化"],
+            ["recipe", "食谱;配方"],
+            ["affordable", "价格合理的;负担得起的"],
+            ["despite", "尽管;虽然"],
+            ["stall", "货摊;摊位"],
+            ["unique", "独一无二的;独特的"],
+            ["overseas", "海外的;在国外"],
+            ["festivity", "庆祝活动;欢乐"],
+            ["guilty", "内疚的;有罪的"],
+            ["nourishing", "有营养的;滋养的"],
+            ["unpretentious", "不炫耀的;朴素的"],
+            ["fuss", "为小事烦恼;过于讲究细节"]
+        ];
+
+        let currentGroup = 0;
+        let timeLeft = 180;
+        let timerId = null;
+        let selected = { left: null, right: null };
+        let totalWords = words.length;
+
+        // 创建单词按钮
+        function createButtons() {
+            const startIdx = currentGroup * 10;
+            const endIdx = startIdx + 10;
+            const group = words.slice(startIdx, endIdx);
+
+            const left = document.getElementById('left-column');
+            const right = document.getElementById('right-column');
+            
+            left.innerHTML = right.innerHTML = '';
+
+            group.forEach((word, index) => {
+                const globalIndex = startIdx + index;
+                
+                const leftBtn = document.createElement('button');
+                leftBtn.className = 'word-btn';
+                leftBtn.textContent = word[0];
+                leftBtn.style.backgroundColor = var(--left-color);
+                leftBtn.dataset.pair = globalIndex;
+                leftBtn.addEventListener('click', () => handleClick(leftBtn, 'left'));
+                
+                const rightBtn = document.createElement('button');
+                rightBtn.className = 'word-btn';
+                rightBtn.textContent = word[1];
+                rightBtn.style.backgroundColor = var(--right-color);
+                rightBtn.dataset.pair = globalIndex;
+                rightBtn.addEventListener('click', () => handleClick(rightBtn, 'right'));
+
+                left.appendChild(leftBtn);
+                right.appendChild(rightBtn);
+            });
+        }
+
+        // 处理点击事件
+        function handleClick(btn, side) {
+            if (!btn.classList.contains('word-btn')) return;
+
+            const otherSide = side === 'left' ? 'right' : 'left';
+            
+            if (selected[side]) {
+                selected[side].style.border = '2px solid #FFF';
+            }
+            
+            btn.style.border = '2px solid #333';
+            selected[side] = btn;
+
+            if (selected.left && selected.right) {
+                checkPair(selected.left, selected.right);
+                selected.left.style.border = '2px solid #FFF';
+                selected.right.style.border = '2px solid #FFF';
+                selected = { left: null, right: null };
+            }
+        }
+
+        // 检查单词配对是否正确
+        function checkPair(leftBtn, rightBtn) {
+            if (leftBtn.dataset.pair === rightBtn.dataset.pair) {
+                leftBtn.remove();
+                rightBtn.remove();
+                totalWords--;
+                document.getElementById('progress').textContent = `剩余：${totalWords}`;
+                checkWin();
+            } else {
+                leftBtn.classList.add('red-flash');
+                rightBtn.classList.add('red-flash');
+                setTimeout(() => {
+                    leftBtn.classList.remove('red-flash');
+                    rightBtn.classList.remove('red-flash');
+                }, 500);
+            }
+        }
+
+        // 检查是否完成所有配对
+        function checkWin() {
+            if (totalWords === 0) {
+                if (currentGroup * 10 + 10 < words.length) {
+                    currentGroup++;
+                    createButtons();
+                    resetTimer();
+                } else {
+                    showExcellent();
+                }
+            }
+        }
+
+        // 显示完成效果
+        function showExcellent() {
+            clearInterval(timerId);
+            const msg = document.createElement('div');
+            msg.className = 'game-over';
+            msg.textContent = 'Excellent!';
+            document.body.appendChild(msg);
+            setTimeout(() => msg.remove(), 2000);
+            setTimeout(() => restartGame(), 2500);
+        }
+
+        // 暂停/继续游戏
+        document.getElementById('pause').addEventListener('click', function() {
+            if (timerId) {
+                clearInterval(timerId);
+                this.textContent = '继续';
+                timerId = null;
+            } else {
+                startTimer();
+                this.textContent = '暂停';
+            }
+        });
+
+        // 重新开始游戏
+        function restartGame() {
+            clearInterval(timerId);
+            currentGroup = 0;
+            totalWords = words.length;
+            document.getElementById('progress').textContent = `剩余：${totalWords}`;
+            createButtons();
+            resetTimer();
+        }
+
+        // 重置计时器
+        function resetTimer() {
+            timeLeft = 180;
+            startTimer();
+        }
+
+        // 开始计时器
+        function startTimer() {
+            timerId = setInterval(() => {
+                timeLeft--;
+                const minutes = Math.floor(timeLeft / 60);
+                const seconds = timeLeft % 60;
+                document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timerId);
+                    showGameOver();
+                }
+            }, 1000);
+        }
+
+        // 游戏结束提示
+        function showGameOver() {
+            const msg = document.createElement('div');
+            msg.className = 'game-over';
+            msg.textContent = 'Game Over';
+            document.body.appendChild(msg);
+                       setTimeout(() => {
+                msg.remove();
+                restartGame();
+            }, 2000);
+        }
+
+        // 提示功能
+        document.getElementById('hint').addEventListener('click', function() {
+            const box = document.getElementById('hint-box');
+            box.style.display = box.style.display === 'block' ? 'none' : 'block';
+            box.innerHTML = words.map(w => `${w[0]} - ${w[1]}`).join('<br>');
+        });
+
+        // 初始化游戏
+        function initGame() {
+            createButtons();
+            document.getElementById('progress').textContent = `剩余：${totalWords}`;
+            startTimer();
+        }
+
+        // 启动游戏
+        initGame();
+    </script>
+</body>
+</html>
